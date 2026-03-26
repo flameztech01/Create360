@@ -4,6 +4,15 @@ import mongoose from "mongoose";
 const memberSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   role: { type: String, default: "Member" },
+  status: { 
+    type: String, 
+    enum: ["pending", "active", "inactive"], 
+    default: "active" 
+  },
+  department: { 
+    type: String, 
+    default: "General" 
+  },
   joinedAt: { type: Date, default: Date.now },
 });
 
@@ -26,6 +35,12 @@ const workspaceSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Index for faster queries
+workspaceSchema.index({ inviteCode: 1 });
+workspaceSchema.index({ owner: 1 });
+workspaceSchema.index({ "members.user": 1 });
+workspaceSchema.index({ "members.status": 1 });
 
 const Workspace = mongoose.model("Workspace", workspaceSchema);
 export default Workspace;

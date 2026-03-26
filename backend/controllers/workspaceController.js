@@ -20,7 +20,7 @@ const generateInviteCode = () =>
 const createWorkspace = async (req, res) => {
   try {
     const { name, industry, description, color, size, website, location, phone } = req.body;
-    const userId = req.user.id; // from auth middleware
+    const userId = req.user.id;
 
     if (!name?.trim()) return res.status(400).json({ message: "Business name is required." });
     if (!industry?.trim()) return res.status(400).json({ message: "Industry is required." });
@@ -38,11 +38,16 @@ const createWorkspace = async (req, res) => {
       owner: userId,
       inviteCode: generateInviteCode(),
       verified: false,
-      members: [{ user: userId, role: "Owner" }],
+      members: [{ 
+        user: userId, 
+        role: "Owner",
+        status: "active",
+        department: "Management",
+        joinedAt: new Date()
+      }],
       activeTasks: 0,
     });
 
-    // Add workspace to user's ownedWorkspaces
     await User.findByIdAndUpdate(userId, {
       $push: { ownedWorkspaces: workspace._id },
     });
@@ -161,41 +166,6 @@ const deleteWorkspace = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// JOIN WORKSPACE VIA INVITE CODE
-// POST /api/workspaces/join
-// ─────────────────────────────────────────────────────────────────────────────
-
-const joinWorkspace = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { inviteCode, role = "Member" } = req.body;
-
-    if (!inviteCode) return res.status(400).json({ message: "Invite code is required." });
-
-    const workspace = await Workspace.findOne({ inviteCode: inviteCode.toUpperCase() });
-    if (!workspace) return res.status(404).json({ message: "Invalid invite code." });
-
-    if (workspace.owner.toString() === userId)
-      return res.status(400).json({ message: "You are the owner of this workspace." });
-
-    const alreadyMember = workspace.members.some((m) => m.user.toString() === userId);
-    if (alreadyMember)
-      return res.status(400).json({ message: "You are already a member of this workspace." });
-
-    workspace.members.push({ user: userId, role });
-    await workspace.save();
-
-    await User.findByIdAndUpdate(userId, {
-      $push: { joinedWorkspaces: workspace._id },
-    });
-
-    res.status(200).json({ success: true, workspace });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
 // LEAVE WORKSPACE
 // POST /api/workspaces/:id/leave
 // ─────────────────────────────────────────────────────────────────────────────
@@ -277,15 +247,43 @@ const regenerateInviteCode = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MIGRATION HELPER: Update existing workspaces (run once)
+// ─────────────────────────────────────────────────────────────────────────────
 
-export  {
+const migrateWorkspaces = async (req, res) => {
+  try {
+    const result = await Workspace.updateMany(
+      { "members.status": { $exists: false } },
+      {
+        $set: {
+          "members.$[elem].status": "active",
+          "members.$[elem].department": "General"
+        }
+      },
+      {
+        arrayFilters: [{ "elem.status": { $exists: false } }]
+      }
+    );
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Migration completed",
+      modifiedCount: result.modifiedCount,
+      matchedCount: result.matchedCount
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export {
   createWorkspace,
   getMyWorkspaces,
   getWorkspace,
   updateWorkspace,
   deleteWorkspace,
-  joinWorkspace,
   leaveWorkspace,
   removeMember,
   regenerateInviteCode,
+  migrateWorkspaces,
 };
