@@ -2,33 +2,36 @@
 import express from 'express';
 import {
   createTask,
-  getWorkspaceTasks,
+  getProjectTasks,
   getTaskById,
   updateTask,
+  reassignTask,
   updateTaskStage,
-  completeTask,
+  approveTaskCompletion,
   deleteTask,
-  getTaskStats,
-  addComment
+  addComment,
+  getMyTasks
 } from '../controllers/taskController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Task routes
-router.route('/')
-  .post(protect, createTask);
+// Personal task view
+router.get('/my-tasks', protect, getMyTasks);
 
-router.get('/workspace/:workspaceId', protect, getWorkspaceTasks);
-router.get('/workspace/:workspaceId/stats', protect, getTaskStats);
+// Task CRUD
+router.post('/', protect, createTask);
+router.get('/project/:projectId', protect, getProjectTasks);
 router.get('/:taskId', protect, getTaskById);
+router.put('/:taskId', protect, updateTask);
+router.delete('/:taskId', protect, deleteTask);
 
-router.route('/:taskId')
-  .put(protect, updateTask)
-  .delete(protect, deleteTask);
-
+// Task management actions
+router.patch('/:taskId/reassign', protect, reassignTask);
 router.patch('/:taskId/stage', protect, updateTaskStage);
-router.patch('/:taskId/complete', protect, completeTask);
+router.patch('/:taskId/approve', protect, approveTaskCompletion);
+
+// Comments
 router.post('/:taskId/comments', protect, addComment);
 
 export default router;

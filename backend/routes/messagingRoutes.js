@@ -13,7 +13,8 @@ import {
   searchUsers,
   addParticipant,
   removeParticipant,
-  markChatAsRead
+  markChatAsRead,
+  updateOnlineStatus  // ← ADD THIS IMPORT
 } from '../controllers/messagingController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import upload from '../middleware/uploadMiddleware.js';
@@ -26,9 +27,19 @@ router.post('/direct', protect, createDirectChat);
 router.get('/chats', protect, getUserChats);
 router.get('/search/users', protect, searchUsers);
 
+// Online status (NEW)
+router.post('/online-status', protect, updateOnlineStatus);  // ← ADD THIS
+
 // Chat messages
 router.get('/:chatId', protect, getChatMessages);
 router.post('/:chatId', protect, upload.single('media'), sendMessage);
+router.use((err, req, res, next) => {
+  console.error('MIDDLEWARE ERROR:', err);
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({ message: err.message });
+  }
+  next(err);
+});
 router.delete('/:messageId', protect, deleteMessage);
 
 // Typing indicators

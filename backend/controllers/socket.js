@@ -59,11 +59,63 @@ export const initSocket = (server) => {
     }
   });
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     console.log(`✅ User connected: ${socket.userId} - ${socket.user.name}`);
 
     // Join user to their personal room
     socket.join(`user:${socket.userId}`);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ONLINE STATUS HANDLING
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const updateUserOnlineStatus = async (isOnline) => {
+      try {
+        // Update all chats where user is a participant
+        await Chat.updateMany(
+          {
+            'participants.user': socket.userId
+          },
+          {
+            $set: {
+              'participants.$.online': isOnline,
+              'participants.$.lastSeen': isOnline ? null : new Date()
+            }
+          }
+        );
+
+        // Get all chats to notify participants
+        const chats = await Chat.find({ 'participants.user': socket.userId });
+        
+        for (const chat of chats) {
+          // Notify all participants in each chat
+          io.to(`chat:${chat._id}`).emit('user-status-changed', {
+            userId: socket.userId,
+            online: isOnline,
+            lastSeen: isOnline ? null : new Date(),
+            chatId: chat._id
+          });
+        }
+
+        console.log(`📡 User ${socket.user.name} is now ${isOnline ? 'online' : 'offline'}`);
+      } catch (error) {
+        console.error('Error updating online status:', error);
+      }
+    };
+
+    // Set user as online on connection
+    await updateUserOnlineStatus(true);
+
+    // Handle presence updates from client
+    socket.on('presence', async (data) => {
+      const { status } = data;
+      const isOnline = status === 'online';
+      await updateUserOnlineStatus(isOnline);
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // WORKSPACE & CHAT ROOMS
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Join workspace rooms
     socket.on('join-workspace', (workspaceId) => {
@@ -83,10 +135,23 @@ export const initSocket = (server) => {
       console.log(`👋 User ${socket.user.name} left chat: ${chatId}`);
     });
 
-    // Send message
+    // ─────────────────────────────────────────────────────────────────────────
+    // SEND MESSAGE
+    // ─────────────────────────────────────────────────────────────────────────
+
     socket.on('send-message', async (data, callback) => {
       try {
-        const { chatId, content, messageType, mentions, replyToId, mediaUrl, mediaName, mediaSize } = data;
+        const { 
+          chatId, 
+          content, 
+          messageType, 
+          mentions, 
+          replyToId, 
+          mediaUrl, 
+          mediaName, 
+          mediaSize,
+          mediaDuration
+        } = data;
 
         const chat = await Chat.findById(chatId);
         if (!chat) {
@@ -99,7 +164,7 @@ export const initSocket = (server) => {
           return callback({ error: 'You are not a participant in this chat' });
         }
 
-        // Create message
+        // Create message with mediaDuration
         const message = await Message.create({
           workspace: chat.workspace,
           chat: chatId,
@@ -109,6 +174,7 @@ export const initSocket = (server) => {
           mediaUrl: mediaUrl || null,
           mediaName: mediaName || null,
           mediaSize: mediaSize || null,
+          mediaDuration: mediaDuration || null,
           mentions: mentions || [],
           replyTo: replyToId || null,
           readBy: [{ user: socket.userId, readAt: new Date() }]
@@ -153,7 +219,10 @@ export const initSocket = (server) => {
       }
     });
 
-    // Typing indicator
+    // ─────────────────────────────────────────────────────────────────────────
+    // TYPING INDICATOR
+    // ─────────────────────────────────────────────────────────────────────────
+
     socket.on('start-typing', async (data) => {
       try {
         const { chatId } = data;
@@ -201,7 +270,10 @@ export const initSocket = (server) => {
       }
     });
 
-    // Mark messages as read
+    // ─────────────────────────────────────────────────────────────────────────
+    // MARK MESSAGES AS READ
+    // ─────────────────────────────────────────────────────────────────────────
+
     socket.on('mark-read', async (data) => {
       try {
         const { chatId, messageIds } = data;
@@ -250,7 +322,10 @@ export const initSocket = (server) => {
       }
     });
 
-    // Delete message (admin only)
+    // ─────────────────────────────────────────────────────────────────────────
+    // DELETE MESSAGE
+    // ─────────────────────────────────────────────────────────────────────────
+
     socket.on('delete-message', async (data, callback) => {
       try {
         const { messageId } = data;
@@ -293,9 +368,13 @@ export const initSocket = (server) => {
       }
     });
 
-    // Disconnect
-    socket.on('disconnect', () => {
+    // ─────────────────────────────────────────────────────────────────────────
+    // DISCONNECT
+    // ─────────────────────────────────────────────────────────────────────────
+
+    socket.on('disconnect', async () => {
       console.log(`❌ User disconnected: ${socket.userId} - ${socket.user.name}`);
+      await updateUserOnlineStatus(false);
     });
   });
 

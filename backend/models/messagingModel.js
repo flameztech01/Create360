@@ -29,7 +29,7 @@ const messageSchema = new mongoose.Schema({
   },
   messageType: {
     type: String,
-    enum: ['text', 'image', 'file', 'audio', 'video'],
+    enum: ['text', 'image', 'video', 'audio', 'file'], // Added 'video'
     default: 'text'
   },
   mediaUrl: {
@@ -41,6 +41,10 @@ const messageSchema = new mongoose.Schema({
     default: null
   },
   mediaSize: {
+    type: Number,
+    default: null
+  },
+  mediaDuration: {  // ← ADD THIS for voice notes/video duration
     type: Number,
     default: null
   },
@@ -138,6 +142,14 @@ const chatSchema = new mongoose.Schema({
     lastReadAt: {
       type: Date,
       default: Date.now
+    },
+    online: {  // ← ADD THIS for online status
+      type: Boolean,
+      default: false
+    },
+    lastSeen: {  // ← ADD THIS for last seen timestamp
+      type: Date,
+      default: Date.now
     }
   }],
   createdBy: {
@@ -176,17 +188,6 @@ const chatSchema = new mongoose.Schema({
 chatSchema.index({ workspace: 1, "participants.user": 1 });
 chatSchema.index({ workspace: 1, type: 1 });
 chatSchema.index({ lastMessageAt: -1 });
-
-// Virtual for unread count
-chatSchema.virtual('unreadCount', {
-  ref: 'Message',
-  localField: '_id',
-  foreignField: 'chat',
-  count: true,
-  match: {
-    readBy: { $not: { $elemMatch: { user: { $eq: '$$user' } } } }
-  }
-});
 
 const Chat = mongoose.model('Chat', chatSchema);
 

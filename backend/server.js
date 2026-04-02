@@ -11,6 +11,7 @@ import workspaceRoutes from './routes/workspaceRoutes.js';
 import teamRoutes from './routes/teamRoutes.js';
 import taskRoutes from './routes/taskRoutes.js';
 import messagingRoutes from './routes/messagingRoutes.js';
+import projectRoutes from './routes/projectRoutes.js';
 
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
 import { initSocket } from "./controllers/socket.js";
@@ -48,6 +49,7 @@ app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/message', messagingRoutes);
+app.use('/api/projects', projectRoutes);
 
 // ✅ Error middleware order (notFound first)
 app.use(notFound);
